@@ -23,13 +23,22 @@ class Predictor:
     if config.get('error_distribution') == 'normal':
       sigma = config.get('sigma')
       self.N_pred = int(max(1, np.round(np.random.normal(problem_instance.N, sigma, 1)).item()))
+    elif config.get('error_distribution') == 'optimistic':
+      delta = config.get('delta')
+      self.N_pred = problem_instance.N + delta
+    elif config.get('error_distribution') == 'pessimistic':
+      delta = config.get('delta')
+      self.N_pred = max(1, problem_instance.N - delta)
+    elif config.get('error_distribution') == 'constant-prediction':
+      self.N_pred = config.get('constant')
 
 class SkiRentalPDLA:
   """
   instances_params: N and B values on which the algo will be tested
   """
-  def __init__(self, instances_params):
-    self.instances_params = instances_params
+
+  def __init__(self, NBs):
+    self.NBs = NBs
 
   def run(self, problem_instance:SkiRentalProblemInstance, lam, N_pred):
     B = problem_instance.B
@@ -72,34 +81,48 @@ class SkiRentalPDLA:
       predictor = Predictor(problem_instance, predictor_config)
       cost_alg = self.run(problem_instance, lam, predictor.N_pred)
       competitive_ratios.append(cost_alg / problem_instance.OPT_cost())
-    return max(competitive_ratios)
+    return np.mean(competitive_ratios).item()
 
   def compute_statistics(self, predictor_configs):
     lams = np.linspace(0.01, 0.99, 100)
     for config in predictor_configs:
       competitive_ratios = []
       for lam in lams:
-        cr_instances = [self.monte_carlo_eval_competitive_ratio(N, B, config, lam) for (N, B) in self.instances_params]
-        competitive_ratios.append(max(cr_instances))
+        competitive_ratios.append(np.mean([self.monte_carlo_eval_competitive_ratio(N, B, config, lam) for (N, B) in self.NBs]).item())
       print(competitive_ratios)
       plt.plot(lams, competitive_ratios, label=config.get('name'))
 
     plt.xlabel('Lambda')
-    plt.ylabel('Estimated competitive ratio')
+    plt.ylabel('Expected performance over OPT')
     plt.legend()
     plt.savefig('plots/statistics.png')
-
-
-
 
 if __name__ == '__main__':
   configs = [
     {
-      'name':'N(0,2)',
+      'name':'normal',
       'error_distribution':'normal',
-      'sigma':1
+      'sigma':5
+    },
+    {
+      'name':'overly-optimistic',
+      'error_distribution':'optimistic',
+      'delta':5
+    },
+    {
+      'name':'overly-pessimistic',
+      'error_distribution':'pessimistic',
+      'delta':5
+    },
+    {
+      'name':'constant-prediction',
+      'error_distribution':'constant-prediction',
+      'constant':1
     }
   ]
-  instances_params = [(N, 20) for N in range(1, 50, 5)]
-  ski_pdla = SkiRentalPDLA(instances_params)
+
+  # generate problem instances with the same cost of OPT
+  NBs = [(N, 7) for N in range(1, 21)]
+
+  ski_pdla = SkiRentalPDLA(NBs)
   ski_pdla.compute_statistics(configs)
