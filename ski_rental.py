@@ -25,6 +25,12 @@ class Predictor:
       self.N_pred = int(max(1, np.round(np.random.normal(problem_instance.N, sigma, 1)).item()))
 
 class SkiRentalPDLA:
+  """
+  instances_params: N and B values on which the algo will be tested
+  """
+  def __init__(self, instances_params):
+    self.instances_params = instances_params
+
   def run(self, problem_instance:SkiRentalProblemInstance, lam, N_pred):
     B = problem_instance.B
     def e(z):
@@ -68,12 +74,16 @@ class SkiRentalPDLA:
       competitive_ratios.append(cost_alg / problem_instance.OPT_cost())
     return max(competitive_ratios)
 
-  def compute_statistics(self, predictor_configs, N=20, B=10):
+  def compute_statistics(self, predictor_configs):
     lams = np.linspace(0.01, 0.99, 100)
     for config in predictor_configs:
-      competitive_ratios = [self.monte_carlo_eval_competitive_ratio(N, B, config, lam) for lam in lams]
+      competitive_ratios = []
+      for lam in lams:
+        cr_instances = [self.monte_carlo_eval_competitive_ratio(N, B, config, lam) for (N, B) in self.instances_params]
+        competitive_ratios.append(max(cr_instances))
       print(competitive_ratios)
       plt.plot(lams, competitive_ratios, label=config.get('name'))
+
     plt.xlabel('Lambda')
     plt.ylabel('Estimated competitive ratio')
     plt.legend()
@@ -90,5 +100,6 @@ if __name__ == '__main__':
       'sigma':1
     }
   ]
-  ski_pdla = SkiRentalPDLA()
+  instances_params = [(N, 20) for N in range(1, 50, 5)]
+  ski_pdla = SkiRentalPDLA(instances_params)
   ski_pdla.compute_statistics(configs)
