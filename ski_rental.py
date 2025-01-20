@@ -31,6 +31,12 @@ class Predictor:
       self.N_pred = max(1, problem_instance.N - delta)
     elif config.get('error_distribution') == 'constant-prediction':
       self.N_pred = config.get('constant')
+    elif config.get('error_distribution') == 'p-correct':
+      x = np.random.random()
+      if x < config.get('p'):
+        self.N_pred = problem_instance.N 
+      else:
+        self.N_pred = max(1, problem_instance.N + config.get('error'))
 
 class SkiRentalPDLA:
   """
@@ -84,6 +90,7 @@ class SkiRentalPDLA:
     return np.mean(competitive_ratios).item()
 
   def compute_statistics(self, predictor_configs):
+    plt.figure()
     lams = np.linspace(0.01, 0.99, 100)
     for config in predictor_configs:
       competitive_ratios = []
@@ -92,10 +99,15 @@ class SkiRentalPDLA:
       print(competitive_ratios)
       plt.plot(lams, competitive_ratios, label=config.get('name'))
 
+    vanilla_val = np.mean([self.monte_carlo_eval_competitive_ratio(N, B, predictor_configs[0], 1) for (N, B) in self.NBs]).item()
     plt.xlabel('Lambda')
     plt.ylabel('Expected performance over OPT')
+    plt.axhline(y=vanilla_val, color='lightblue', linestyle='--', linewidth=1.5, label='vanilla PD')
     plt.legend()
-    plt.savefig('plots/statistics.png')
+    if predictor_configs[0].get('type') == 'deltas':
+      plt.savefig('plots/statistics_deltas.png')
+    else:
+      plt.savefig('plots/statistics.png')
 
 if __name__ == '__main__':
   configs = [
@@ -118,11 +130,70 @@ if __name__ == '__main__':
       'name':'constant-prediction',
       'error_distribution':'constant-prediction',
       'constant':1
+    },
+    {
+      'name':'p-correct-optimistic',
+      'error_distribution':'p-correct',
+      'p':0.5,
+      'error':500
+    },
+    {
+      'name':'p-correct-pessimistic',
+      'error_distribution':'p-correct',
+      'p':0.5,
+      'error':-500
+    },
+    {
+      'name':'correct',
+      'error_distribution':'p-correct',
+      'p':1,
+      'error':0
     }
+  ]
+
+  configs_delta = [
+    {
+      'type':'deltas',
+      'name':'pessimistic 2',
+      'error_distribution':'pessimistic',
+      'delta':2
+    },
+    {
+      'name':'pessimistic 5',
+      'error_distribution':'pessimistic',
+      'delta':5
+    },
+    {
+      'name':'pessimistic 20',
+      'error_distribution':'pessimistic',
+      'delta':20
+    },
+    {
+      'name':'optimistic 2',
+      'error_distribution':'optimistic',
+      'delta':2
+    },
+    {
+      'name':'optimistic 5',
+      'error_distribution':'optimistic',
+      'delta':5
+    },
+    {
+      'name':'optimistic 20',
+      'error_distribution':'optimistic',
+      'delta':20
+    },
+    {
+      'name':'optimistic 100',
+      'error_distribution':'optimistic',
+      'delta':100
+    },
   ]
 
   # generate problem instances with the same cost of OPT
   NBs = [(N, 7) for N in range(1, 21)]
 
   ski_pdla = SkiRentalPDLA(NBs)
-  ski_pdla.compute_statistics(configs)
+  ski_pdla.compute_statistics(configs) 
+  ski_pdla_deltas = SkiRentalPDLA(NBs) 
+  ski_pdla_deltas.compute_statistics(configs_delta)
